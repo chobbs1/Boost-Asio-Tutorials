@@ -1,6 +1,7 @@
 # My .gitignore additions
 .vscode/
 bin/
+examples/
 
 # Prerequisites
 *.d
