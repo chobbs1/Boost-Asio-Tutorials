@@ -6,9 +6,6 @@ namespace io = boost::asio;
 using tcp = io::ip::tcp;
 using error_code = boost::system::error_code;
 
-using message_handler = std::function<void (std::string)>;
-using error_handler = std::function<void>;
-
 class Session : public std::enable_shared_from_this<Session>
 {
     public:
@@ -22,16 +19,13 @@ class Session : public std::enable_shared_from_this<Session>
         {
             boost::asio::async_read_until(m_socket, m_stream_buffer, '\n', 
                 boost::bind(&Session::HandleInput,shared_from_this(),boost::asio::placeholders::error,boost::asio::placeholders::bytes_transferred));
-
-
         };
 
-        void HandleInput(boost::system::error_code error, std::size_t bytes_transferred)
+        void HandleInput(error_code error, std::size_t bytes_transferred)
         {
             std::istream is(&m_stream_buffer);
             std::cout << is.rdbuf();
         }
-
 
     public:
         tcp::socket& GetSocket() {return m_socket;};
