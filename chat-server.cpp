@@ -8,7 +8,7 @@ using tcp = io::ip::tcp;
 using error_code = boost::system::error_code;
 
 using message_handler = std::function<void (std::string message)>;
-using error_handler = std::function<void ()>;
+using error_handler = std::function<void (size_t)>;
 
 class Session : public std::enable_shared_from_this<Session>
 {
@@ -19,33 +19,35 @@ class Session : public std::enable_shared_from_this<Session>
         {
         }
 
-        void Start(size_t client_id,message_handler&& on_message)
+        void Start(size_t client_id,message_handler&& on_message,error_handler&& on_error)
         {
             m_on_message = on_message;
+            m_on_error = on_error;
             m_client_id = ++client_id;
+
             AsyncRead();
         }
 
         void AsyncRead()
         {
-            boost::asio::async_read_until(m_socket, m_stream_buffer, '\n',boost::bind(&Session::HandleInput,shared_from_this(),boost::asio::placeholders::error,boost::asio::placeholders::bytes_transferred));
+            boost::asio::async_read_until(m_socket, m_stream_buffer, '\n',boost::bind(&Session::OnRead,shared_from_this(),boost::asio::placeholders::error,boost::asio::placeholders::bytes_transferred));
 
         }
 
-        void HandleInput(boost::system::error_code error, std::size_t bytes_transferred)
+        void OnRead(boost::system::error_code error, std::size_t bytes_transferred)
         {
             if(!error) {
                 std::istream is(&m_stream_buffer);
                 std::stringstream sstream;
-
                 sstream << "Client " << m_client_id << ": " << is.rdbuf();
-
                 std::cout << sstream.str();
-
                 m_on_message(sstream.str());
-            }
 
-            AsyncRead();
+                AsyncRead();
+            } else {
+                m_socket.close();
+                m_on_error(m_client_id);
+            }
         }
 
         void Post(std::string& message) 
@@ -73,7 +75,8 @@ class Session : public std::enable_shared_from_this<Session>
                     AsyncWrite();
                 } 
             } else {
-                m_socket.close(error);
+                m_socket.close();
+                m_on_error(m_client_id);
             }
         }
 
@@ -108,11 +111,12 @@ class Server
 
         void OnConnection()
         {
-            m_new_session->Start(m_clients.size(),std::bind(&Server::Post,this,std::placeholders::_1));
+            m_new_session->Start(m_clients.size(),std::bind(&Server::Post,this,std::placeholders::_1),std::bind(&Server::RemoveClient,this,std::placeholders::_1));
             m_clients.push_back(m_new_session);
 
             std::stringstream is;
             is << "Server: Received Client " << m_clients.size() << "\n\r";
+            std::cout << is.str();
 
             Post(is.str());
             AcceptAsync();
@@ -123,6 +127,15 @@ class Server
             for(auto &client : m_clients) {
                 client->Post(message);
             }
+        }
+
+        void RemoveClient(size_t client_id)
+        {
+            m_clients.erase(m_clients.begin()+client_id,m_clients.begin()+client_id+1);
+
+            std::stringstream ss;
+            ss << "Client " << client_id << " has disconnected\n\r";
+            Post(ss.str());
         }
 
         
