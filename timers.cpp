@@ -20,14 +20,12 @@ auto begin = now();
 void AsyncWait()
 {
     timer.expires_after(std::chrono::seconds(1));
-
     timer.async_wait(std::bind(CalculateTime,std::placeholders::_1));
 }
 
 void CalculateTime(error_code error)
 {
     auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now() - begin).count();
-
     std::cout << "Timeout after: " << elapsed << std::endl;
     AsyncWait();
 }
